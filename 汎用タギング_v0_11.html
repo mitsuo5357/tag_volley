@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tagging Studio (汎用版 v0.11)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #1c2128; --panel: #2a313c; --line: #3a424f;
+    --ink: #e8eaed; --sub: #9aa4b2; --accent: #4f8cc9;
+    --chip-ink: #fff;
+  }
+  html, body { height: 100%; }
+  body {
+    font-family: "Segoe UI", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+    background: var(--bg); color: var(--ink); overflow: hidden;
+    font-size: 13px;
+  }
+  #app { display: flex; height: 100vh; }
+
+  /* ===== ペイン境界スプリッター ===== */
+  #splitter { flex: 0 0 7px; cursor: col-resize; background: var(--line); position: relative; touch-action: none; }
+  #splitter::before { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 3px; height: 40px; border-radius: 2px; background: #5a6573; }
+  #splitter:hover::before, #splitter.drag::before { background: var(--accent); }
+
+  /* ===== 左ペイン：動画 ===== */
+  #left { flex: 0 0 58%; display: flex; flex-direction: column; padding: 8px; min-width: 280px; }
+  video { cursor: pointer; }
+  #status { display: flex; justify-content: space-between; font-size: 12px; color: var(--sub); margin-bottom: 6px; }
+  #video-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 6px; overflow: hidden; flex-shrink: 0; }
+  video { width: 100%; height: 100%; display: block; }
+  #empty-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #5a6573; font-size: 14px; text-align: center; padding: 20px; }
+
+  /* オーバーレイ：8ゾーン */
+  #overlay { position: absolute; inset: 0; pointer-events: none; }
+  .zone { position: absolute; display: flex; flex-direction: column; gap: 3px; max-width: 38%; }
+  .zone.tl { top: 6px; left: 6px; align-items: flex-start; }
+  .zone.tc { top: 6px; left: 50%; transform: translateX(-50%); align-items: center; }
+  .zone.tr { top: 6px; right: 6px; align-items: flex-end; }
+  .zone.ml { top: 50%; left: 6px; transform: translateY(-50%); align-items: flex-start; }
+  .zone.mr { top: 50%; right: 6px; transform: translateY(-50%); align-items: flex-end; }
+  .zone.bl { bottom: 6px; left: 6px; align-items: flex-start; flex-direction: column-reverse; }
+  .zone.bc { bottom: 30px; left: 50%; transform: translateX(-50%); align-items: center; flex-direction: column-reverse; }
+  .zone.br { bottom: 6px; right: 6px; align-items: flex-end; flex-direction: column-reverse; }
+  .ov-chip { font-size: 15px; font-weight: 700; color: var(--chip-ink); padding: 3px 10px; border-radius: 5px; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,.5); opacity: .96; pointer-events: auto; }
+  .ov-chip .ax { font-size: 11px; opacity: .8; font-weight: 500; margin-right: 4px; }
+  .ov-chip .mine-star { font-size: 11px; margin-left: 5px; }
+  .ov-chip.mine { cursor: pointer; }
+  .ov-chip.mine:hover { outline: 2px solid #fff; }
+  .ov-chip.mine:hover::after { content: " ×"; font-size: 13px; }
+  #ov-time { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); font-size: 13px; font-weight: 700; color: #fff; background: rgba(0,0,0,.45); padding: 1px 8px; border-radius: 4px; }
+
+  #seek-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; font-size: 12px; font-weight: 700; }
+  #seek { flex: 1; }
+  #ctrl-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  #ctrl-row button, #ctrl-row select, #ctrl-row label.filebtn {
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 5px; padding: 6px 10px; cursor: pointer; font-size: 12px;
+  }
+  #ctrl-row button:hover { background: #333c49; }
+  #video-upload { display: none; }
+
+  #counter { display: none; gap: 18px; justify-content: center; margin-top: 8px; padding: 6px; background: var(--panel); border-radius: 6px; }
+  #counter.on { display: flex; }
+  .ctr { text-align: center; }
+  .ctr .lbl { font-size: 11px; color: var(--sub); }
+  .ctr .val { font-size: 22px; font-weight: 800; }
+  .ctr button { width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; font-size: 14px; }
+
+  /* ===== 右ペイン：タグ ===== */
+  #right { flex: 1 1 auto; display: flex; flex-direction: column; background: var(--panel); border-left: 1px solid var(--line); min-width: 300px; }
+  #right-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  #right-head .title { font-weight: 700; font-size: 13px; }
+  #right-head button { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 5px 9px; cursor: pointer; font-size: 12px; }
+  #axes { flex: 1; overflow-y: auto; padding: 8px 10px; }
+  .axis-block { margin-bottom: 10px; }
+  .axis-name { font-size: 11px; font-weight: 700; color: var(--sub); margin-bottom: 4px; padding-left: 4px; border-left: 3px solid var(--accent); }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 5px; }
+  .tag-btn { color: var(--chip-ink); border: none; border-radius: 5px; padding: 8px 12px; cursor: pointer; font-size: 13px; font-weight: 600; transition: transform .05s; }
+  .tag-btn:active { transform: scale(.93); }
+  .tag-btn.flash { animation: flash .4s; }
+  @keyframes flash { 0% { box-shadow: 0 0 0 3px #fff; } 100% { box-shadow: none; } }
+
+  #comment-row { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line); }
+  #comment-row input { flex: 1; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 7px; font-size: 13px; }
+  #comment-row button { background: var(--accent); color: #fff; border: none; border-radius: 5px; padding: 7px 12px; cursor: pointer; }
+
+  #log-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--sub); }
+  #log-head button { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 11px; }
+  #log { height: 150px; overflow-y: auto; padding: 4px 10px 10px; font-size: 12px; }
+  .log-item { display: flex; gap: 6px; padding: 3px 0; border-bottom: 1px solid #313945; align-items: baseline; }
+  .log-item .lt { color: var(--accent); font-weight: 700; cursor: pointer; min-width: 38px; }
+  .log-item .lx { color: var(--sub); font-size: 10px; }
+  .log-item .lc { color: #d98324; font-style: italic; }
+  .log-item .ldel { margin-left: auto; cursor: pointer; color: #c85a54; font-weight: 700; padding: 0 4px; font-size: 13px; }
+  .log-item .lmine { color: #ffd24a; font-size: 11px; }
+
+  /* ===== モーダル ===== */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 50; }
+  .modal.open { display: flex; }
+  .modal-box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; width: min(680px, 94vw); max-height: 92vh; overflow-y: auto; padding: 16px; }
+  .modal-box h3 { font-size: 15px; margin-bottom: 12px; }
+  .modal-box h4 { font-size: 12px; color: var(--sub); margin: 14px 0 6px; }
+  .modal-box h4.sec { font-size: 13.5px; color: var(--ink); border-top: 1px solid var(--line); margin-top: 16px; padding-top: 12px; }
+  .modal-box .sec-body { padding-left: 1.1em; }
+  .opt-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
+  .opt-row label { font-size: 13px; }
+  .opt-row input[type=text], .opt-row input[type=number] { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 5px; }
+  .seg { width: 64px; }
+  .def-axis { border: 1px solid var(--line); border-radius: 6px; padding: 10px; margin-bottom: 10px; }
+  .def-axis-head { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .def-axis-head input.axname { flex: 1; min-width: 120px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 6px; font-weight: 700; }
+  .def-axis-head select, .def-axis-head input[type=color] { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 5px; }
+  .def-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 3px 4px 3px 8px; margin: 3px 3px 0 0; }
+  .def-tag input { background: transparent; border: none; color: var(--ink); font-size: 12px; width: 70px; }
+  .def-tag .note { width: 90px; color: var(--sub); border-left: 1px solid var(--line); padding-left: 5px; }
+  .def-tag .x { cursor: pointer; color: #c85a54; font-weight: 700; padding: 0 3px; }
+  .mini { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 4px 9px; cursor: pointer; font-size: 12px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+  .modal-actions .primary { background: var(--accent); color: #fff; border: none; }
+  .preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 左：動画 -->
+  <div id="left">
+    <div id="status">
+      <span>🎬 <span id="vname">動画未選択</span></span>
+      <span id="save-status">●ローカル保存</span>
+    </div>
+    <div id="share-bar" style="display:flex;gap:6px;align-items:center;padding:6px 10px;background:#1c222b;border-bottom:1px solid #2a313c">
+      <span style="font-size:12px;color:#9aa4b2;white-space:nowrap">🔗 共有URL</span>
+      <input id="ss-id-top" placeholder="GASの /exec URL を貼って読込" style="flex:1;min-width:0;font-size:13px;padding:4px 6px;background:#11161d;color:#e6eaf0;border:1px solid #2a313c;border-radius:4px">
+      <button class="mini primary" onclick="loadShared(document.getElementById('ss-id-top').value)">読込</button>
+      <span id="ss-status" style="font-size:11px;color:#9aa4b2;white-space:nowrap"></span>
+    </div>
+    <div id="video-wrap">
+      <video id="video"></video>
+      <div id="overlay">
+        <div class="zone tl" data-z="tl"></div><div class="zone tc" data-z="tc"></div><div class="zone tr" data-z="tr"></div>
+        <div class="zone ml" data-z="ml"></div><div class="zone mr" data-z="mr"></div>
+        <div class="zone bl" data-z="bl"></div><div class="zone bc" data-z="bc"></div><div class="zone br" data-z="br"></div>
+        <div id="ov-time" style="display:none"></div>
+      </div>
+      <div id="empty-hint">「動画を開く」から分析したい動画ファイルを選んでください<br>（端末内に保存された動画。アップロードはされません）</div>
+    </div>
+    <div id="seek-row">
+      <span id="t-cur">0:00</span>
+      <input type="range" id="seek" value="0" min="0" step="1" disabled>
+      <span id="t-tot">0:00</span>
+    </div>
+    <div id="ctrl-row">
+      <label class="filebtn">動画を開く<input type="file" id="video-upload" accept="video/*"></label>
+      <button onclick="skip(-5)">⏪ 5秒</button>
+      <button onclick="togglePlay()">▶ / ⏸</button>
+      <button onclick="skip(5)">5秒 ⏩</button>
+      <button onclick="skip(-1)">◁ コマ</button>
+      <button onclick="skip(1)">コマ ▷</button>
+      <select id="rate" onchange="changeRate()">
+        <option value="0.25">0.25x</option><option value="0.5">0.5x</option>
+        <option value="0.75">0.75x</option><option value="1" selected>1.0x</option>
+        <option value="1.5">1.5x</option><option value="2">2.0x</option>
+      </select>
+    </div>
+    <div id="counter">
+      <div class="ctr"><div class="lbl" id="ctr-a-lbl">A</div>
+        <button onclick="bumpCounter('a',-1)">−</button>
+        <span class="val" id="ctr-a-val">0</span>
+        <button onclick="bumpCounter('a',1)">＋</button></div>
+      <div class="ctr"><div class="lbl" id="ctr-b-lbl">B</div>
+        <button onclick="bumpCounter('b',-1)">−</button>
+        <span class="val" id="ctr-b-val">0</span>
+        <button onclick="bumpCounter('b',1)">＋</button></div>
+    </div>
+  </div>
+
+  <!-- ペイン境界（ドラッグで幅可変） -->
+  <div id="splitter" title="ドラッグで幅を調整"></div>
+
+  <!-- 右：タグ -->
+  <div id="right">
+    <div id="right-head">
+      <span class="title" id="proj-title">タグパネル</span>
+      <button onclick="openSettings()">⚙ 設定</button>
+    </div>
+    <div id="axes"></div>
+    <div id="comment-row">
+      <input type="text" id="comment" placeholder="コメントを入力（別枠メモ）" onkeydown="if(event.key==='Enter')sendComment()">
+      <button onclick="sendComment()">記録</button>
+    </div>
+    <div id="log-head">
+      <span>記録ログ（<span id="log-count">0</span>件）</span>
+      <span>
+        <button onclick="undoLast()">↩ 取消</button>
+        <button onclick="exportCSV()">CSV出力</button>
+      </span>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<!-- 設定モーダル -->
+<div class="modal" id="settings">
+  <div class="modal-box">
+    <h3>⚙ 設定</h3>
+    <div id="set-banner" style="display:none;padding:8px 10px;border-radius:6px;margin-bottom:10px;font-size:12px;font-weight:600;line-height:1.5"></div>
+
+    <h4>プロジェクト名</h4>
+    <div class="opt-row"><input type="text" id="set-proj" style="flex:1" placeholder="例：吹奏楽コンクール課題曲 / ○○戦"></div>
+
+    <h4>タグ定義のプリセット（叩き台用サンプル）</h4>
+    <div class="preset-row">
+      <button class="mini" onclick="applyPreset('band')">🎵 吹奏楽</button>
+      <button class="mini" onclick="applyPreset('volley')">🏐 バレー（簡易）</button>
+      <button class="mini" onclick="applyPreset('blank')">⬜ 空から作る</button>
+    </div>
+
+    <h4>タグ軸（上から順に。各軸＝記録の1要素）</h4>
+    <div id="def-axes"></div>
+    <button class="mini" onclick="addAxis()">＋ 軸を追加</button>
+
+    <h4 class="sec">表示オプション</h4>
+    <div class="sec-body">
+    <div class="opt-row"><label><input type="checkbox" id="opt-time"> 経過時間を動画に表示</label></div>
+    <div class="opt-row"><label><input type="checkbox" id="opt-counter"> カウンターを表示</label>
+      ラベル <input type="text" id="opt-ctr-a" class="seg" placeholder="A">
+      <input type="text" id="opt-ctr-b" class="seg" placeholder="B"></div>
+    <div class="opt-row"><label>タグの表示秒数</label>
+      <input type="number" id="opt-dispsec" min="0.5" max="10" step="0.5" class="seg"> 秒
+      <span class="lx" style="color:var(--sub);font-size:11px">（この秒数内に重なったタグは自動で段積み表示）</span></div>
+    <div class="opt-row"><label>この端末のID</label>
+      <span id="opt-op-disp" style="font-family:monospace;color:var(--sub)"></span>
+      <span class="lx" style="color:var(--sub);font-size:11px">（自動付与。画面に名前は出ません。記録の照合用）</span></div>
+    </div>
+
+    <h4 class="sec">共有（GASウェブアプリと同期）</h4>
+    <div class="sec-body">
+    <div class="opt-row"><label style="min-width:104px">共有URL</label>
+      <input type="text" id="set-sheetid" style="flex:1" placeholder="GASの /exec URL（再現の元・読み書き兼用）"></div>
+    <div class="opt-row">
+      <button class="mini primary" onclick="saveSyncConfig()">共有設定を保存</button>
+      <button class="mini" onclick="loadShared(document.getElementById('set-sheetid').value)">今すぐ読込</button>
+      <span class="lx" style="color:var(--sub);font-size:11px">スプシは非公開のままでOK。GASを「アクセス=全員」でデプロイ</span>
+    </div>
+    </div>
+
+    <div id="admin-section" style="display:none">
+    <h4 class="sec">タグ設定をみんなに反映（管理者）</h4>
+    <div class="sec-body">
+    <div class="opt-row">
+      <button class="mini primary" onclick="publishDef()">みんなに反映</button>
+      <span class="lx" style="color:var(--sub);font-size:11px">いまのタグ設定を、全員のアプリへ配布します</span>
+    </div>
+    </div>
+    </div>
+
+    <h4 class="sec">定義の持ち出し／読み込み（手動バックアップ用）</h4>
+    <div class="sec-body">
+    <div class="opt-row">
+      <button class="mini" onclick="exportDef()">定義をJSON保存</button>
+      <label class="mini" style="cursor:pointer">定義JSONを読込<input type="file" id="def-import" accept=".json" style="display:none"></label>
+    </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="mini" onclick="closeSettings()">閉じる</button>
+      <button class="mini primary" onclick="saveSettings()">保存して反映</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============ プリセット定義 ============ */
+const PRESETS = {
+  band: {
+    proj: "吹奏楽：パート別タギング",
+    axes: [
+      { name: "パート", pos: "tl", color: "#3b6fb0", tags: [
+        {name:"Fl"},{name:"Cl"},{name:"Sax"},{name:"Tp"},{name:"Hr"},{name:"Tb"},{name:"Euph"},{name:"Tuba"},{name:"Perc"}] },
+      { name: "観点", pos: "tr", color: "#2e8b57", tags: [
+        {name:"音程"},{name:"リズム"},{name:"音色"},{name:"バランス"},{name:"表現"}] },
+      { name: "評価", pos: "br", color: "#d98324", tags: [
+        {name:"◎",note:"とても良い"},{name:"〇",note:"良い"},{name:"△",note:"要改善"},{name:"✕",note:"課題"}] },
+    ],
+    options: { time:true, counter:false, ctrA:"A", ctrB:"B", dispSec:2 }
+  },
+  volley: {
+    proj: "バレー（簡易）：プレー別タギング",
+    axes: [
+      { name: "対象", pos: "tl", color: "#3b6fb0", tags: [{name:"味方"},{name:"相手"}] },
+      { name: "プレー", pos: "tc", color: "#2e8b57", tags: [
+        {name:"サーブ"},{name:"レセプ"},{name:"トス"},{name:"アタック"},{name:"ブロック"},{name:"ディグ"}] },
+      { name: "評価", pos: "br", color: "#d98324", tags: [
+        {name:"◎",note:"決定/エース"},{name:"〇",note:"成功"},{name:"△",note:"凡庸"},{name:"✕",note:"ミス"}] },
+    ],
+    options: { time:true, counter:true, ctrA:"自", ctrB:"相", dispSec:2 }
+  },
+  blank: {
+    proj: "新規プロジェクト",
+    axes: [ { name: "カテゴリ1", pos: "tl", color: "#3b6fb0", tags: [{name:"タグ1"}] } ],
+    options: { time:true, counter:false, ctrA:"A", ctrB:"B", dispSec:2 }
+  }
+};
+
+/* ============ 端末ID（自動付与・匿名。照合用にだけ記録） ============ */
+const DEV_KEY = "tagging_studio_devid";
+function getDeviceId() {
+  try {
+    let id = localStorage.getItem(DEV_KEY);
+    if (!id) { id = "dev_" + Math.random().toString(36).slice(2,8); localStorage.setItem(DEV_KEY, id); }
+    return id;
+  } catch(e) {
+    if (!window._devid) window._devid = "dev_" + Math.random().toString(36).slice(2,8);
+    return window._devid;
+  }
+}
+const DEVICE_ID = getDeviceId();
+
+/* ============ 状態 ============ */
+const LS_KEY = "tagging_studio_v01";
+let proj = "タグパネル";
+let axes = [];                 // [{name,pos,color,tags:[{name,note}]}]
+let records = [];              // [{id,ts,axis,tag,note,op,kind}]  kind: 'tag'|'comment'
+let options = { time:true, counter:false, ctrA:"A", ctrB:"B", dispSec:2 };
+let counters = { a:0, b:0 };
+let videoName = "動画未選択";
+let recId = 1;
+
+const video = document.getElementById("video");
+const seek = document.getElementById("seek");
+
+/* ============ 保存（プレビューでも落ちないよう try-catch） ============ */
+function save() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({ proj, axes, records, options, counters, videoName, recId }));
+    document.getElementById("save-status").textContent = "●ローカル保存";
+  } catch(e) {
+    document.getElementById("save-status").textContent = "○保存不可(セッションのみ)";
+  }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      proj = d.proj ?? proj; axes = d.axes ?? []; records = d.records ?? [];
+      options = Object.assign(options, d.options || {});
+      counters = d.counters || {a:0,b:0}; videoName = d.videoName || "動画未選択";
+      recId = d.recId || 1;
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+/* ============ 動画制御 ============ */
+document.getElementById("video-upload").addEventListener("change", e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  video.src = URL.createObjectURL(f);
+  videoName = f.name;
+  document.getElementById("vname").textContent = f.name;
+  document.getElementById("empty-hint").style.display = "none";
+  save();
+});
+video.addEventListener("loadedmetadata", () => {
+  seek.max = Math.floor(video.duration); seek.disabled = false;
+  document.getElementById("t-tot").textContent = fmt(video.duration);
+});
+video.addEventListener("timeupdate", () => {
+  if (!video.paused) seek.value = Math.floor(video.currentTime);
+  document.getElementById("t-cur").textContent = fmt(video.currentTime);
+  renderOverlay();
+});
+seek.addEventListener("input", () => { video.currentTime = seek.value; renderOverlay(); });
+function togglePlay(){ video.paused ? video.play() : video.pause(); }
+video.addEventListener("click", () => { if (video.src) togglePlay(); });
+function skip(s){ video.currentTime = Math.max(0, video.currentTime + s); renderOverlay(); }
+function changeRate(){ video.playbackRate = parseFloat(document.getElementById("rate").value); }
+function fmt(sec){ const m=Math.floor(sec/60), s=Math.floor(sec%60).toString().padStart(2,"0"); return `${m}:${s}`; }
+
+/* ============ タグUIの生成 ============ */
+function renderAxes() {
+  document.getElementById("proj-title").textContent = proj;
+  const wrap = document.getElementById("axes");
+  wrap.innerHTML = "";
+  axes.forEach((ax, ai) => {
+    const block = document.createElement("div");
+    block.className = "axis-block";
+    const nm = document.createElement("div");
+    nm.className = "axis-name"; nm.textContent = ax.name;
+    nm.style.borderLeftColor = ax.color;
+    block.appendChild(nm);
+    const row = document.createElement("div"); row.className = "tag-row";
+    ax.tags.forEach(t => {
+      const b = document.createElement("button");
+      b.className = "tag-btn"; b.style.background = ax.color;
+      b.textContent = t.name;
+      if (t.note) b.title = t.note;
+      b.onclick = () => recordTag(ai, t, b);
+      row.appendChild(b);
+    });
+    block.appendChild(row);
+    wrap.appendChild(block);
+  });
+}
+
+/* ============ 記録（1タップ＝1レコード、同一TSに積み上がる） ============ */
+function recordTag(ai, tag, btn) {
+  const ax = axes[ai];
+  records.push({ id: recId++, ts: Math.floor(video.currentTime), axis: ax.name,
+                 tag: tag.name, note: tag.note || "", op: DEVICE_ID, kind: "tag" });
+  if (btn) { btn.classList.add("flash"); setTimeout(()=>btn.classList.remove("flash"),400); }
+  renderLog(); renderOverlay(); save();
+}
+function sendComment() {
+  const el = document.getElementById("comment");
+  const txt = el.value.trim();
+  if (!txt) return;
+  records.push({ id: recId++, ts: Math.floor(video.currentTime), axis: "コメント",
+                 tag: "", note: txt, op: DEVICE_ID, kind: "comment" });
+  el.value = "";
+  renderLog(); renderOverlay(); save();
+}
+
+/* ============ オーバーレイ（時間窓内のタグを各ゾーンに段積み＝衝突回避） ============ */
+function renderOverlay() {
+  const now = video.currentTime;
+  document.querySelectorAll(".zone").forEach(z => z.innerHTML = "");
+  // 経過時間
+  const ot = document.getElementById("ov-time");
+  if (options.time) { ot.style.display = "block"; ot.textContent = fmt(now); } else { ot.style.display = "none"; }
+  // 軸名 → ゾーン/色 の対応表
+  const axMap = {};
+  axes.forEach(a => axMap[a.name] = a);
+  // 表示窓内のレコード（古い順）
+  const win = options.dispSec;
+  const shown = records.filter(r => r.ts <= now && r.ts > now - win);
+  shown.forEach(r => {
+    let zoneKey, color, label;
+    if (r.kind === "comment") { zoneKey = "bc"; color = "#555f6e"; label = `💬 ${r.note}`; }
+    else { const a = axMap[r.axis]; zoneKey = a ? a.pos : "tl"; color = a ? a.color : "#666";
+           label = `<span class="ax">${r.axis}</span>${r.tag}`; }
+    const zone = document.querySelector(`.zone.${zoneKey}`);
+    if (!zone) return;
+    const mine = (r.op === DEVICE_ID);
+    const chip = document.createElement("div");
+    chip.className = "ov-chip" + (mine ? " mine" : "");
+    chip.style.background = color;
+    chip.innerHTML = label + (mine ? `<span class="mine-star">★</span>` : "");
+    if (mine) { chip.title = "クリックで削除（自分のタグ）"; chip.onclick = () => deleteRecord(r.id); }
+    zone.appendChild(chip);  // 同ゾーンに複数 → flexで自動段積み＝全部見える
+  });
+}
+
+/* ============ ログ ============ */
+function renderLog() {
+  const log = document.getElementById("log");
+  document.getElementById("log-count").textContent = records.length;
+  log.innerHTML = "";
+  records.slice().reverse().forEach(r => {
+    const mine = (r.op === DEVICE_ID);
+    const d = document.createElement("div"); d.className = "log-item";
+    const t = document.createElement("span"); t.className = "lt"; t.textContent = fmt(r.ts);
+    t.title = "クリックでその時刻へ"; t.onclick = () => { video.currentTime = r.ts; renderOverlay(); };
+    d.appendChild(t);
+    if (r.kind === "comment") {
+      const c = document.createElement("span"); c.className = "lc"; c.textContent = "💬 " + r.note; d.appendChild(c);
+    } else {
+      const x = document.createElement("span"); x.className = "lx"; x.textContent = r.axis; d.appendChild(x);
+      const g = document.createElement("span"); g.textContent = r.tag + (r.note ? `（${r.note}）` : ""); d.appendChild(g);
+    }
+    if (mine) { const s=document.createElement("span"); s.className="lmine"; s.textContent="★"; d.appendChild(s); }
+    if (mine) { const del=document.createElement("span"); del.className="ldel"; del.textContent="×";
+                del.title="自分のタグを削除"; del.onclick=()=>deleteRecord(r.id); d.appendChild(del); }
+    log.appendChild(d);
+  });
+  log.scrollTop = 0;
+}
+function deleteRecord(id) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  if (r.op !== DEVICE_ID) return;   // 他者のタグは消せない（事故防止）
+  records = records.filter(x => x.id !== id);
+  renderLog(); renderOverlay(); save();
+}
+function undoLast() {                // 直前の「自分の」タグを取消
+  for (let i = records.length - 1; i >= 0; i--) {
+    if (records[i].op === DEVICE_ID) { records.splice(i,1); break; }
+  }
+  renderLog(); renderOverlay(); save();
+}
+
+/* ============ カウンター ============ */
+function bumpCounter(k, d) { counters[k] = Math.max(0, counters[k] + d); updateCounter(); save(); }
+function updateCounter() {
+  document.getElementById("counter").classList.toggle("on", options.counter);
+  document.getElementById("ctr-a-lbl").textContent = options.ctrA || "A";
+  document.getElementById("ctr-b-lbl").textContent = options.ctrB || "B";
+  document.getElementById("ctr-a-val").textContent = counters.a;
+  document.getElementById("ctr-b-val").textContent = counters.b;
+}
+
+/* ============ CSV（縦持ち：共有スプレッドシートと同じ列構成） ============ */
+function exportCSV() {
+  let csv = "video_name,timestamp_sec,timestamp_disp,axis,tag,note,operator\n";
+  records.forEach(r => {
+    const cells = [videoName, r.ts, fmt(r.ts), r.axis, r.tag, r.note, r.op]
+      .map(v => `"${String(v).replace(/"/g,'""')}"`);
+    csv += cells.join(",") + "\n";
+  });
+  const blob = new Blob(["\ufeff"+csv], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = (proj || "tagging") + "_log.csv";
+  a.click();
+}
+
+/* ============ 設定モーダル ============ */
+function openSettings() {
+  document.getElementById("set-proj").value = proj === "タグパネル" ? "" : proj;
+  document.getElementById("opt-time").checked = options.time;
+  document.getElementById("opt-counter").checked = options.counter;
+  document.getElementById("opt-ctr-a").value = options.ctrA || "";
+  document.getElementById("opt-ctr-b").value = options.ctrB || "";
+  document.getElementById("opt-dispsec").value = options.dispSec;
+  document.getElementById("opt-op-disp").textContent = DEVICE_ID;
+  renderDefAxes();
+  document.getElementById("settings").classList.add("open");
+}
+function closeSettings(){ document.getElementById("settings").classList.remove("open"); }
+
+const POS_OPTS = [["tl","左上"],["tc","上中"],["tr","右上"],["ml","左中"],["mr","右中"],["bl","左下"],["bc","下中"],["br","右下"]];
+// 設定中の編集対象（モーダル内ドラフト）
+let draftAxes = [];
+function renderDefAxes() {
+  draftAxes = JSON.parse(JSON.stringify(axes));  // ドラフトに複製
+  drawDefAxes();
+}
+function drawDefAxes() {
+  const wrap = document.getElementById("def-axes");
+  wrap.innerHTML = "";
+  draftAxes.forEach((ax, ai) => {
+    const box = document.createElement("div"); box.className = "def-axis";
+    const head = document.createElement("div"); head.className = "def-axis-head";
+    const nm = document.createElement("input"); nm.className = "axname"; nm.value = ax.name;
+    nm.oninput = e => ax.name = e.target.value;
+    const pos = document.createElement("select");
+    POS_OPTS.forEach(([v,l]) => { const o=document.createElement("option"); o.value=v; o.textContent="表示:"+l; if(ax.pos===v)o.selected=true; pos.appendChild(o); });
+    pos.onchange = e => ax.pos = e.target.value;
+    const col = document.createElement("input"); col.type="color"; col.value = ax.color;
+    col.oninput = e => ax.color = e.target.value;
+    const del = document.createElement("button"); del.className="mini"; del.textContent="軸を削除";
+    del.onclick = () => { draftAxes.splice(ai,1); drawDefAxes(); };
+    head.append(nm, pos, col, del);
+    box.appendChild(head);
+    // タグ群
+    const tagWrap = document.createElement("div");
+    ax.tags.forEach((t, ti) => {
+      const chip = document.createElement("span"); chip.className = "def-tag";
+      const tn = document.createElement("input"); tn.value = t.name; tn.placeholder="タグ名";
+      tn.oninput = e => t.name = e.target.value;
+      const nt = document.createElement("input"); nt.className="note"; nt.value = t.note||""; nt.placeholder="note(任意)";
+      nt.oninput = e => t.note = e.target.value;
+      const x = document.createElement("span"); x.className="x"; x.textContent="×";
+      x.onclick = () => { ax.tags.splice(ti,1); drawDefAxes(); };
+      chip.append(tn, nt, x);
+      tagWrap.appendChild(chip);
+    });
+    const addT = document.createElement("button"); addT.className="mini"; addT.style.marginTop="6px"; addT.textContent="＋ タグ追加";
+    addT.onclick = () => { ax.tags.push({name:"",note:""}); drawDefAxes(); };
+    box.append(tagWrap, addT);
+    wrap.appendChild(box);
+  });
+}
+function addAxis() {
+  draftAxes.push({ name:"新しい軸", pos:"tl", color:"#3b6fb0", tags:[{name:"タグ1",note:""}] });
+  drawDefAxes();
+}
+function saveSettings() {
+  proj = document.getElementById("set-proj").value.trim() || "タグパネル";
+  options.time = document.getElementById("opt-time").checked;
+  options.counter = document.getElementById("opt-counter").checked;
+  options.ctrA = document.getElementById("opt-ctr-a").value || "A";
+  options.ctrB = document.getElementById("opt-ctr-b").value || "B";
+  options.dispSec = parseFloat(document.getElementById("opt-dispsec").value) || 2;
+  // ドラフト → 本番（空タグ・空軸は除去）
+  axes = draftAxes
+    .map(a => ({ ...a, tags: a.tags.filter(t => t.name.trim() !== "") }))
+    .filter(a => a.name.trim() !== "" && a.tags.length > 0);
+  renderAxes(); updateCounter(); renderOverlay(); save();
+  closeSettings();
+}
+function applyPreset(key) {
+  const p = PRESETS[key];
+  document.getElementById("set-proj").value = p.proj;
+  draftAxes = JSON.parse(JSON.stringify(p.axes));
+  drawDefAxes();
+  document.getElementById("opt-time").checked = p.options.time;
+  document.getElementById("opt-counter").checked = p.options.counter;
+  document.getElementById("opt-ctr-a").value = p.options.ctrA;
+  document.getElementById("opt-ctr-b").value = p.options.ctrB;
+  document.getElementById("opt-dispsec").value = p.options.dispSec;
+}
+
+/* ============ 定義の入出力（将来：スプレッドシート定義シートと同期） ============ */
+function exportDef() {
+  const def = { proj, axes, options: { time:options.time, counter:options.counter, ctrA:options.ctrA, ctrB:options.ctrB, dispSec:options.dispSec } };
+  const blob = new Blob([JSON.stringify(def, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = (proj||"tagging") + "_定義.json"; a.click();
+}
+document.getElementById("def-import").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const d = JSON.parse(rd.result);
+      if (d.proj) document.getElementById("set-proj").value = d.proj;
+      if (d.axes) { draftAxes = JSON.parse(JSON.stringify(d.axes)); drawDefAxes(); }
+      if (d.options) {
+        document.getElementById("opt-time").checked = !!d.options.time;
+        document.getElementById("opt-counter").checked = !!d.options.counter;
+        document.getElementById("opt-ctr-a").value = d.options.ctrA || "A";
+        document.getElementById("opt-ctr-b").value = d.options.ctrB || "B";
+        document.getElementById("opt-dispsec").value = d.options.dispSec || 2;
+      }
+      alert("定義を読み込みました。「保存して反映」で適用されます。");
+    } catch(err) { alert("JSONの読み込みに失敗しました：" + err.message); }
+  };
+  rd.readAsText(f);
+});
+
+/* ============ ペイン幅可変（スプリッター） ============ */
+(function(){
+  const sp = document.getElementById("splitter");
+  const left = document.getElementById("left");
+  const app = document.getElementById("app");
+  let dragging = false;
+  function startX(e){ dragging = true; sp.classList.add("drag"); e.preventDefault(); }
+  function moveX(clientX){
+    if (!dragging) return;
+    const rect = app.getBoundingClientRect();
+    let w = clientX - rect.left;
+    const min = 280, max = rect.width - 300;   // 左右の最小幅を確保
+    w = Math.max(min, Math.min(max, w));
+    left.style.flex = "0 0 " + w + "px";
+    renderOverlay();   // 動画サイズ変化に追従
+  }
+  function endX(){ dragging = false; sp.classList.remove("drag"); }
+  sp.addEventListener("mousedown", startX);
+  window.addEventListener("mousemove", e => moveX(e.clientX));
+  window.addEventListener("mouseup", endX);
+  sp.addEventListener("touchstart", startX, {passive:false});
+  window.addEventListener("touchmove", e => { if(dragging && e.touches[0]) moveX(e.touches[0].clientX); }, {passive:true});
+  window.addEventListener("touchend", endX);
+})();
+
+/* ============ 初期化 ============ */
+function boot() {
+  if (!load()) {                       // 初回は吹奏楽プリセットで起動
+    const p = PRESETS.band;
+    proj = p.proj; axes = JSON.parse(JSON.stringify(p.axes));
+    options = Object.assign(options, p.options);
+  }
+  document.getElementById("vname").textContent = videoName;
+  if (videoName !== "動画未選択") document.getElementById("empty-hint").style.display = "none";
+  renderAxes(); renderLog(); updateCounter(); renderOverlay();
+}
+boot();
+</script>
+
+<script>
+"use strict";
+/* ===== 共有読み込みモジュール v0.5（GAS+JSONP / file://対応） ===== */
+/* ===== 共有読み込み：純粋関数（行配列ベース。CSVもJSONP(2D配列)も同経路） ===== */
+
+function csvParse(text) {
+  const rows = []; let row = [], field = "", i = 0, q = false;
+  text = String(text).replace(/\r\n?/g, "\n");
+  while (i < text.length) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i+1] === '"') { field += '"'; i += 2; continue; } q = false; i++; continue; } field += c; i++; continue; }
+    if (c === '"') { q = true; i++; continue; }
+    if (c === ",") { row.push(field); field = ""; i++; continue; }
+    if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
+    field += c; i++;
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+// セルを安全に文字列化（GASのgetValuesは数値/真偽値が混ざる）
+function S(row, i) { const v = row && row[i]; return (v === undefined || v === null) ? "" : String(v).trim(); }
+
+const POS_LABEL2CODE = { "左上":"tl","上中":"tc","右上":"tr","左中":"ml","右中":"mr","左下":"bl","下中":"bc","右下":"br" };
+const POS_CODES = new Set(["tl","tc","tr","ml","mr","bl","bc","br"]);
+function toPosCode(v) { v = (v||"").trim(); if (POS_CODES.has(v)) return v; return POS_LABEL2CODE[v] || "tl"; }
+function normColor(v) { v = (v||"").trim(); if (!v) return "#3b6fb0"; return v[0] === "#" ? v : "#" + v; }
+function headerMap(rows) { const h = (rows[0]||[]).map(x => S([x],0)); const m={}; h.forEach((n,i)=>m[n]=i); return m; }
+function truthy(v){ v=(v||"").trim().toLowerCase(); return v==="true"||v==="1"||v==="yes"||v==="はい"||v==="on"; }
+
+// タグ定義（行配列）→ {axes}（軸名が空の行＝直前の軸へ carry-down）
+function parseDefinitionRows(rows) {
+  if (!rows || !rows.length) return { axes: [] };
+  const m = headerMap(rows);
+  const ci = { ax:m["軸名"], pos:m["表示位置"], col:m["色"], tag:m["タグ名"], note:m["タグnote"] };
+  const axes = []; let cur = null;
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r]; if (!row || row.every((c,i)=>S(row,i)==="")) continue;
+    const axName = S(row, ci.ax);
+    if (axName) { cur = { name: axName, pos: toPosCode(S(row,ci.pos)), color: normColor(S(row,ci.col)), tags: [] }; axes.push(cur); }
+    const tagName = S(row, ci.tag);
+    if (tagName && cur) cur.tags.push({ name: tagName, note: S(row, ci.note) });
+  }
+  return { axes: axes.filter(a => a.tags.length > 0) };
+}
+
+// プロジェクト設定（行配列）→ {proj, options}
+function parseSettingsRows(rows) {
+  if (!rows || !rows.length) return { proj: undefined, options: {} };
+  const m = headerMap(rows); const ki = m["項目"], vi = m["値"];
+  const kv = {};
+  for (let r = 1; r < rows.length; r++) { const k = S(rows[r], ki); if (k) kv[k] = S(rows[r], vi); }
+  const out = { proj: undefined, options: {} };
+  if (kv["プロジェクト名"]) out.proj = kv["プロジェクト名"];
+  if ("経過時間を表示" in kv) out.options.time = truthy(kv["経過時間を表示"]);
+  if ("カウンター表示" in kv) out.options.counter = truthy(kv["カウンター表示"]);
+  if (kv["カウンターAラベル"]) out.options.ctrA = kv["カウンターAラベル"];
+  if (kv["カウンターBラベル"]) out.options.ctrB = kv["カウンターBラベル"];
+  if (kv["タグ表示秒数"]) out.options.dispSec = parseFloat(kv["タグ表示秒数"]) || 2;
+  if (kv["動画URL"]) out.options.videoUrl = kv["動画URL"];
+  return out;
+}
+
+// ログ（行配列）→ records（id は op:rec_id、kind既定 'tag'）
+function parseLogRows(rows) {
+  if (!rows || !rows.length) return [];
+  const m = headerMap(rows);
+  const out = [];
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r]; if (!row || row.every((c,i)=>S(row,i)==="")) continue;
+    const op = S(row, m["op"]), rid = S(row, m["rec_id"]);
+    if (!op || !rid) continue;
+    out.push({ id: op + ":" + rid, op, rec_id: rid, remote: true,
+      ts: parseInt(S(row, m["timestamp_sec"]) || "0", 10) || 0,
+      kind: S(row, m["kind"]) || "tag",
+      axis: S(row, m["axis"]), tag: S(row, m["tag"]), note: S(row, m["note"]),
+      video_name: S(row, m["video_name"]) });
+  }
+  return out;
+}
+
+// CSVラッパ（gvizフォールバック用）
+function parseDefinitionCSV(t){ return parseDefinitionRows(csvParse(t)); }
+function parseSettingsCSV(t){ return parseSettingsRows(csvParse(t)); }
+function parseLogCSV(t){ return parseLogRows(csvParse(t)); }
+
+// 取込：自分(op===DEVICE_ID)のエコー除外＋(op,rec_id)で重複除去
+function mergeRecords(existing, incoming, DEVICE_ID) {
+  const keyOf = r => (r.op||"") + "|" + (r.rec_id != null ? r.rec_id : r.id);
+  const seen = new Set(existing.map(keyOf)); const merged = existing.slice(); let added = 0;
+  for (const r of incoming) { if (r.op === DEVICE_ID) continue; const k = keyOf(r); if (seen.has(k)) continue; seen.add(k); merged.push(r); added++; }
+  return { merged, added };
+}
+
+const SS_URL_KEY = "tagging_studio_sharedurl";
+const SS_SYNC_KEY = "tagging_studio_syncurl";
+let sharedUrl = "", syncUrl = "";
+try { sharedUrl = localStorage.getItem(SS_URL_KEY) || ""; syncUrl = localStorage.getItem(SS_SYNC_KEY) || sharedUrl; } catch (e) {}
+
+function isGasExec(u) { return /script\.google\.com\/macros\/s\/[^/]+\/exec/.test((u || "").trim()); }
+
+function loadShared(rawUrl, opts) {
+  opts = opts || {};
+  const url = (rawUrl || "").trim();
+  const status = document.getElementById("ss-status");
+  if (!url) { if (!opts.silent) alert("共有URL（GASの /exec URL）を入れてください"); return; }
+  if (/docs\.google\.com\/spreadsheets/.test(url) || !isGasExec(url)) {
+    if (!opts.silent) alert("ここには GAS の /exec URL を貼ってください。\n（スプレッドシートのURL/IDではありません）\n例: https://script.google.com/macros/s/XXXX/exec");
+    return;
+  }
+  if (status) status.textContent = "読込中…";
+  const cbName = "__tg_jsonp_" + Date.now();
+  const s = document.createElement("script");
+  let done = false;
+  const cleanup = () => { try { delete window[cbName]; } catch (e) { window[cbName] = undefined; } if (s.parentNode) s.parentNode.removeChild(s); };
+  const timer = setTimeout(() => { if (done) return; done = true; cleanup(); if (status) status.textContent = "\u00d7 タイムアウト"; if (!opts.silent) alert("読み込みがタイムアウトしました。URL（/exec）とデプロイのアクセス権（全員）をご確認ください。"); }, 15000);
+  window[cbName] = function (payload) {
+    if (done) return; done = true; clearTimeout(timer); cleanup();
+    try {
+      applyShared(payload);
+      sharedUrl = url; syncUrl = url;   // 読み込んだURLを書込/照合にも常に反映（1本に統一）
+      try { localStorage.setItem(SS_URL_KEY, url); if (!localStorage.getItem(SS_SYNC_KEY)) localStorage.setItem(SS_SYNC_KEY, url); } catch (e) {}
+      const top = document.getElementById("ss-id-top"); if (top) top.value = url;
+    } catch (err) { if (status) status.textContent = "\u00d7 " + err.message; if (!opts.silent) alert("反映に失敗：" + err.message); }
+  };
+  s.onerror = () => { if (done) return; done = true; clearTimeout(timer); cleanup(); if (status) status.textContent = "\u00d7 取得失敗"; if (!opts.silent) alert("取得に失敗しました。URL（/exec）とデプロイ設定（アクセス=全員）をご確認ください。"); };
+  const sep = url.includes("?") ? "&" : "?";
+  s.src = url + sep + "mode=all&callback=" + cbName;
+  document.head.appendChild(s);
+}
+
+function loadVideoUrl(url) {
+  try {
+    video.src = url;
+    try { videoName = decodeURIComponent((url.split("?")[0].split("/").pop()) || "") || "デモ動画"; } catch (e) { videoName = "デモ動画"; }
+    const hint = document.getElementById("empty-hint"); if (hint) hint.style.display = "none";
+    const vn = document.getElementById("vname"); if (vn) vn.textContent = videoName;
+  } catch (e) {}
+}
+function applyShared(p) {
+  if (!p || !p.ok) throw new Error((p && p.error) || "応答が不正です");
+  const d = parseDefinitionRows(p.def || []);
+  if (d.axes.length) axes = d.axes;
+  const st = parseSettingsRows(p.settings || []);
+  if (st.proj) proj = st.proj;
+  options = Object.assign(options, st.options);
+  const merged = mergeRecords(records, parseLogRows(p.log || []), DEVICE_ID);
+  records = merged.merged;
+  if (options.videoUrl && video && !video.src) loadVideoUrl(options.videoUrl);
+  renderAxes(); updateCounter(); renderOverlay(); renderLog(); save();
+  const status = document.getElementById("ss-status");
+  if (status) status.textContent = "\u2713 反映（他者+" + merged.added + "）";
+}
+
+function saveSyncConfig() {
+  sharedUrl = (document.getElementById("set-sheetid").value || "").trim();
+  syncUrl = sharedUrl;
+  try { localStorage.setItem(SS_URL_KEY, sharedUrl); localStorage.setItem(SS_SYNC_KEY, syncUrl); } catch (e) {}
+  alert("共有設定を保存しました。" + (sharedUrl ? "「今すぐ読込」で反映できます。" : ""));
+}
+
+const _openSettings = openSettings;
+openSettings = function () {
+  _openSettings();
+  const a = document.getElementById("set-sheetid"); if (a) a.value = sharedUrl;
+  const b = document.getElementById("set-syncurl"); if (b) b.value = (syncUrl && syncUrl !== sharedUrl) ? syncUrl : "";
+};
+
+/* 書込（任意）：no-cors POST。URL未設定なら何もしない */
+const _save = save;
+let _syncTimer = null;
+const _syncedKeys = new Set();
+save = function () { _save(); if (!syncUrl) return; clearTimeout(_syncTimer); _syncTimer = setTimeout(pushUnsynced, 1500); };
+async function pushUnsynced() {
+  if (!syncUrl) return;
+  const mine = records.filter(r => r.op === DEVICE_ID && !_syncedKeys.has(DEVICE_ID + "|" + r.id));
+  if (!mine.length) return;
+  const payload = mine.map(r => ({ video_name: videoName, timestamp_sec: r.ts, timestamp_disp: fmt(r.ts),
+    kind: r.kind || "tag", axis: r.axis, tag: r.tag, note: r.note || "", op: DEVICE_ID, rec_id: r.id }));
+  const st = document.getElementById("save-status");
+  try {
+    if (st) st.textContent = "\u25cf同期中…";
+    await fetch(syncUrl, { method: "POST", mode: "no-cors", body: JSON.stringify({ records: payload }) });
+    mine.forEach(r => _syncedKeys.add(DEVICE_ID + "|" + r.id));
+    if (st) st.textContent = "\u25cf共有に同期済み";
+  } catch (e) { if (st) st.textContent = "\u25cfローカル保存（同期は次回）"; }
+}
+
+/* 起動時：?gas= / ?sid= か保存済みURLで自動再現（失敗は静かに無視） */
+(function () {
+  const q = new URLSearchParams(location.search);
+  const u = q.get("gas") || q.get("sid");
+  if (u) loadShared(u, { silent: true });
+  else if (sharedUrl) loadShared(sharedUrl, { silent: true });
+  const v = q.get("video"); if (v) loadVideoUrl(v);
+})();
+
+/* ===== v0.7: 設定オープン時に合言葉ゲート（照合はサーバ側／モード表示） ===== */
+const ADMIN_KEY_LS = "tagging_studio_adminkey";
+let _sessionAdmin = false;
+let _verifiedKey = "";
+try { _verifiedKey = localStorage.getItem(ADMIN_KEY_LS) || ""; } catch (e) {}
+
+const _openRaw = openSettings;   // v0.5でフォーム値を埋めるラップ済みopenSettings
+openSettings = async function () {
+  if (!syncUrl) { _openRaw(); setSettingsMode("setup"); return; }          // 共有URL未設定＝準備中（ゲートなし）
+  if (_sessionAdmin) { _openRaw(); setSettingsMode("admin"); return; }     // このセッションで認証済みは素通り
+  const entered = prompt("合言葉を入力してください。\n（タグの作成・変更ができるのは準備した人だけです。使うだけならキャンセルでOK）");
+  if (entered === null) return;                                            // キャンセル＝開かない
+  const sv = document.getElementById("save-status"); if (sv) sv.textContent = "\u25cf認証中…";
+  let ok = false; try { ok = await verifyKey(entered); } catch (e) { ok = false; }
+  if (sv) sv.textContent = "\u25cfローカル保存";
+  _openRaw();
+  if (ok) { _sessionAdmin = true; _verifiedKey = entered; try { localStorage.setItem(ADMIN_KEY_LS, entered); } catch (e) {} setSettingsMode("admin"); }
+  else { setSettingsMode("local"); }
+};
+
+function setSettingsMode(mode) {
+  const banner = document.getElementById("set-banner");
+  const admin = document.getElementById("admin-section");
+  if (admin) admin.style.display = (mode === "admin") ? "block" : "none";  // 反映ボタンは管理者モードだけ
+  if (!banner) return;
+  banner.style.display = "block";
+  if (mode === "admin") { banner.textContent = "\ud83d\udd10 管理者モード：『みんなに反映』で、全員のアプリに配られます"; banner.style.background = "#16351f"; banner.style.color = "#7fe0a0"; }
+  else if (mode === "setup") { banner.textContent = "準備中：まず下の『共有設定を保存』で共有URL（GASの /exec）を登録してください"; banner.style.background = "#2a313c"; banner.style.color = "#9aa4b2"; }
+  else { banner.textContent = "\u26a0 あなたは管理者ではありません。ここでの変更は『この端末だけ』で、みんなには共有されません。（元に戻すには「読込」）"; banner.style.background = "#3a2330"; banner.style.color = "#ff9db0"; }
+}
+
+function verifyKey(key) {
+  return new Promise(function (resolve) {
+    if (!syncUrl) { resolve(false); return; }
+    const cb = "__tg_verify_" + Date.now();
+    const s = document.createElement("script");
+    let done = false;
+    const cleanup = function () { try { delete window[cb]; } catch (e) { window[cb] = undefined; } if (s.parentNode) s.parentNode.removeChild(s); };
+    const t = setTimeout(function () { if (done) return; done = true; cleanup(); resolve(false); }, 10000);
+    window[cb] = function (res) { if (done) return; done = true; clearTimeout(t); cleanup(); resolve(!!(res && res.ok && res.admin)); };
+    s.onerror = function () { if (done) return; done = true; clearTimeout(t); cleanup(); resolve(false); };
+    const sep = syncUrl.includes("?") ? "&" : "?";
+    s.src = syncUrl + sep + "mode=verify&key=" + encodeURIComponent(key) + "&callback=" + cb;
+    document.head.appendChild(s);
+  });
+}
+
+async function publishDef() {
+  if (!syncUrl) { alert("先に『共有設定を保存』で共有URL（GASの /exec）を設定してね"); return; }
+  if (!_verifiedKey) { alert("管理者として認証されていません。設定を開き直して合言葉を入力してね"); return; }
+  saveSettings();                          // 編集を確定（軸/オプション/proj）
+  const payload = { type: "def", admin: _verifiedKey, proj: proj, options: options, def: axes };
+  const st = document.getElementById("save-status");
+  try {
+    if (st) st.textContent = "\u25cf反映を送信中…";
+    await fetch(syncUrl, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) });
+    if (st) st.textContent = "\u25cfみんなに反映を送信";
+    setTimeout(function () { loadShared(sharedUrl || syncUrl, { silent: true }); }, 1000);
+    alert("みんなに反映しました。各自が読込／起動した時に、同じタグになります。");
+  } catch (e) { if (st) st.textContent = "\u25cf反映に失敗"; alert("反映に失敗：ネットワークをご確認ください"); }
+}
+</script>
+</body>
+</html>
