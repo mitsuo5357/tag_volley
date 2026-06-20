@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>汎用タギング｜動画に、学びを刻む</title>
+<meta name="description" content="映像の“その瞬間”にタグを付ければ、ただの動画が見て学べる教材になる。スポーツ・授業・現場、ひとつのアプリで。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<!-- =================================================================== -->
+<!--  ★設定：ここだけ自分の値に書き換えてください                        -->
+<!--  各版のスプシに紐づく GAS の /exec URL を、生のまま貼るだけでOK。    -->
+<!--  （?gas= へのエンコードはページ側で自動でやります）                  -->
+<!-- =================================================================== -->
+<script>
+const APP_PATH = "tagging.html";   // アプリ本体のファイル名（同じリポジトリに置く）
+const DEMOS = {
+  volley:  { gas: "" },  // ← バレー版スプシの exec URL を貼る
+  lecture: { gas: "" },  // ← 授業版スプシの exec URL を貼る
+  ojt:     { gas: "" },  // ← OJT版スプシの exec URL を貼る
+};
+</script>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg:    #0d1117;
+    --bg2:   #141c27;
+    --ink:   #e8edf4;
+    --sub:   #8b97a8;
+    --line:  #222c3a;
+    --sport: #4a90d9;
+    --edu:   #46b888;
+    --work:  #e0913a;
+    --maxw:  1080px;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Noto Sans JP", system-ui, sans-serif;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  /* ambient glow */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(60% 50% at 18% 0%, rgba(74,144,217,.10), transparent 70%),
+      radial-gradient(50% 45% at 88% 8%, rgba(70,184,136,.08), transparent 70%);
+  }
+  .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  .mono { font-family: "JetBrains Mono", monospace; }
+
+  /* ---------- hero ---------- */
+  header { padding: 88px 0 24px; }
+  .eyebrow {
+    font-family: "JetBrains Mono", monospace; font-size: 12px; letter-spacing: .28em;
+    text-transform: uppercase; color: var(--sub); margin-bottom: 26px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .eyebrow::before { content: ""; width: 28px; height: 1px; background: var(--sub); display: inline-block; }
+  h1 {
+    font-weight: 900; font-size: clamp(40px, 7vw, 78px); line-height: 1.05;
+    letter-spacing: -.02em; margin-bottom: 22px;
+  }
+  h1 .ink-mark {
+    background: linear-gradient(110deg, var(--sport), var(--edu) 55%, var(--work));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .lede { font-size: clamp(15px, 1.7vw, 18px); color: var(--sub); max-width: 40em; }
+
+  /* ---------- signature: timeline ---------- */
+  .stage { padding: 56px 0 96px; }
+  .tl-cap {
+    font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .2em;
+    color: var(--sub); text-transform: uppercase; margin-bottom: 18px;
+  }
+  .timeline {
+    position: relative; height: 230px; border-bottom: 1px solid var(--line);
+    margin-top: 8px;
+  }
+  .ticks { position: absolute; inset: 0; }
+  .tick { position: absolute; bottom: 0; width: 1px; height: 10px; background: var(--line); }
+  .tick span {
+    position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
+    font-family: "JetBrains Mono", monospace; font-size: 10px; color: #5a6678; white-space: nowrap;
+  }
+  .tag {
+    position: absolute; bottom: 0; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 0;
+    opacity: 0; animation: rise .6s cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  .tag .stem { width: 1.5px; background: currentColor; border-radius: 1px; }
+  .tag .pill {
+    font-size: 12px; font-weight: 500; white-space: nowrap;
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 6px;
+    background: color-mix(in srgb, currentColor 16%, var(--bg));
+    border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+    box-shadow: 0 6px 20px -8px currentColor;
+  }
+  .tag .ts { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--sub); margin-top: 6px; }
+  .t-sport { color: var(--sport); }
+  .t-edu   { color: var(--edu); }
+  .t-work  { color: var(--work); }
+  @keyframes rise { from { opacity: 0; transform: translate(-50%, 16px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+  .legend { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 52px; }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sub); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; }
+
+  /* ---------- section frame ---------- */
+  section { padding: 80px 0; border-top: 1px solid var(--line); }
+  .s-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 40px; flex-wrap: wrap; }
+  .s-num { font-family: "JetBrains Mono", monospace; font-size: 13px; color: var(--sub); }
+  h2 { font-weight: 900; font-size: clamp(26px, 3.4vw, 38px); letter-spacing: -.01em; }
+  .s-sub { color: var(--sub); font-size: 15px; max-width: 38em; margin-top: -26px; margin-bottom: 40px; }
+
+  /* ---------- field cards ---------- */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card {
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 26px 24px 24px; position: relative; overflow: hidden;
+    transition: transform .25s ease, border-color .25s ease;
+  }
+  .card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--c);
+  }
+  .card:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--c) 50%, var(--line)); }
+  .card .kicker { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .16em; color: var(--c); text-transform: uppercase; }
+  .card h3 { font-size: 20px; font-weight: 700; margin: 12px 0 10px; }
+  .card p { font-size: 14px; color: var(--sub); margin-bottom: 22px; }
+  .card .tags-mini { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
+  .card .tags-mini i {
+    font-style: normal; font-size: 11px; padding: 3px 9px; border-radius: 999px;
+    color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--c) 32%, transparent);
+  }
+  .demo-btn {
+    display: inline-flex; align-items: center; gap: 9px; text-decoration: none;
+    font-size: 14px; font-weight: 700; color: var(--bg); background: var(--c);
+    padding: 10px 18px; border-radius: 9px; transition: filter .2s ease, transform .2s ease;
+  }
+  .demo-btn:hover { filter: brightness(1.08); transform: translateX(2px); }
+  .demo-btn .arr { transition: transform .2s ease; }
+  .demo-btn:hover .arr { transform: translateX(3px); }
+  .demo-btn[aria-disabled="true"] {
+    background: transparent; color: var(--sub); border: 1px dashed var(--line);
+    pointer-events: none; font-weight: 500;
+  }
+  .c-sport { --c: var(--sport); }
+  .c-edu   { --c: var(--edu); }
+  .c-work  { --c: var(--work); }
+
+  /* ---------- how ---------- */
+  .how-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .how-item { padding: 4px 0; }
+  .how-item .n { font-family: "JetBrains Mono", monospace; font-size: 13px; color: var(--sport); margin-bottom: 12px; }
+  .how-item h4 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .how-item p { font-size: 14px; color: var(--sub); }
+
+  /* ---------- footer ---------- */
+  footer { border-top: 1px solid var(--line); padding: 44px 0 64px; }
+  .note {
+    font-size: 12.5px; color: var(--sub); background: var(--bg2);
+    border: 1px solid var(--line); border-left: 3px solid var(--sport);
+    border-radius: 8px; padding: 14px 16px; max-width: 52em; margin-bottom: 28px;
+  }
+  .brand { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .brand .name { font-weight: 700; font-size: 15px; }
+  .brand .meta { font-family: "JetBrains Mono", monospace; font-size: 11px; color: #5a6678; letter-spacing: .1em; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 760px) {
+    .cards, .how-grid { grid-template-columns: 1fr; }
+    .timeline { height: 280px; }
+    header { padding-top: 60px; }
+  }
+  a:focus-visible, .demo-btn:focus-visible { outline: 2px solid var(--edu); outline-offset: 3px; border-radius: 6px; }
+  @media (prefers-reduced-motion: reduce) {
+    .tag { animation: none; opacity: 1; transform: translateX(-50%); }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="eyebrow">動画タギング・プラットフォーム</div>
+    <h1>動画に、<span class="ink-mark">学びを刻む。</span></h1>
+    <p class="lede">スポーツのプレーも、授業の問いも、現場のひと手間も。映像の“その瞬間”にタグを付ければ、ただの動画が、見て学べる教材になる。インストールも、特別なシステムも、いらない。</p>
+  </div>
+</header>
+
+<div class="stage">
+  <div class="wrap">
+    <div class="tl-cap">// one timeline, three fields</div>
+    <div class="timeline" id="timeline">
+      <div class="ticks" id="ticks"></div>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--sport)"></i>スポーツ</span>
+      <span><i class="dot" style="background:var(--edu)"></i>教育・授業</span>
+      <span><i class="dot" style="background:var(--work)"></i>現場・業務</span>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <div class="s-head"><span class="s-num">01</span><h2>ひとつのアプリ、3つの現場</h2></div>
+    <p class="s-sub">対象が変わっても、やることは同じ。「いつ・何が・なぜ大事か」を、映像の時刻に貼っていくだけ。下のデモは、そのまま触って試せます。</p>
+    <div class="cards">
+
+      <div class="card c-sport">
+        <div class="kicker">Sports</div>
+        <h3>身体技能を可視化する</h3>
+        <p>プレーの局面にタグを打てば、初心者には見えない「上達のポイント」が見えてくる。</p>
+        <div class="tags-mini"><i>レシーブ</i><i>トス</i><i>アタック</i><i>◎ 評価</i></div>
+        <a class="demo-btn" data-demo="volley"><span>デモを開く</span><span class="arr">→</span></a>
+      </div>
+
+      <div class="card c-edu">
+        <div class="kicker">Education</div>
+        <h3>思考と対話を振り返る</h3>
+        <p>発問や「間（ま）」にタグを打てば、感覚的だった授業の良し悪しが、具体的に残る。</p>
+        <div class="tags-mini"><i>発問</i><i>間（ま）</i><i>視覚化</i><i>つまずき予告</i></div>
+        <a class="demo-btn" data-demo="lecture"><span>デモを開く</span><span class="arr">→</span></a>
+      </div>
+
+      <div class="card c-work">
+        <div class="kicker">On-the-job</div>
+        <h3>現場のコツを受け継ぐ</h3>
+        <p>作業の手順にタグを打てば、紙では伝わらない先輩の暗黙知が、次の人へ渡る。</p>
+        <div class="tags-mini"><i>配線</i><i>部品の向き</i><i>熱注意</i><i>前任者ミス</i></div>
+        <a class="demo-btn" data-demo="ojt"><span>デモを開く</span><span class="arr">→</span></a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="s-head"><span class="s-num">02</span><h2>仕組み</h2></div>
+    <p class="s-sub">研修で終わらせず、現場で使う。スキルを見える化し、必要な瞬間に学ぶ——「スキルの可視化」と「現場のパフォーマンス支援」を、いちばん軽い形で。</p>
+    <div class="how-grid">
+      <div class="how-item">
+        <div class="n">A</div>
+        <h4>インストール不要</h4>
+        <p>ブラウザだけで動く。1人1台端末でも、低スペックでも、そのまま使える。</p>
+      </div>
+      <div class="how-item">
+        <div class="n">B</div>
+        <h4>URLひとつで開く</h4>
+        <p>リンクを共有するだけで、タグも動画もまとめて立ち上がる。配る手間がいらない。</p>
+      </div>
+      <div class="how-item">
+        <div class="n">C</div>
+        <h4>みんなで付け合う</h4>
+        <p>Google スプレッドシートで同期。同じ映像に、別々の視点でタグを重ねられる。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="note">
+      バレーボール映像は、出演者保護のためぼかし処理を施しています。授業・電子工作の出演者は制作者本人です。
+    </div>
+    <div class="brand">
+      <span class="name">統計学でまちづくり</span>
+      <span class="meta">汎用タギング / demo</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ---- timeline signature (3 fields mixed on one axis) ----
+  const TAGS = [
+    { t: 3,  label: "配線",       cls: "t-work"  },
+    { t: 5,  label: "発問",       cls: "t-edu"   },
+    { t: 7,  label: "レシーブ",   cls: "t-sport" },
+    { t: 11, label: "間（ま）",   cls: "t-edu"   },
+    { t: 12, label: "通電チェック", cls: "t-work" },
+    { t: 18, label: "アタック",   cls: "t-sport" },
+    { t: 22, label: "つまずき予告", cls: "t-edu" },
+    { t: 27, label: "◎ 決定",     cls: "t-sport" },
+  ];
+  const SPAN = 30; // 0:00–0:30
+  const fmt = s => "0:" + String(s).padStart(2, "0");
+  const tl = document.getElementById("timeline");
+  const ticks = document.getElementById("ticks");
+  [0,5,10,15,20,25,30].forEach(s => {
+    const k = document.createElement("div"); k.className = "tick";
+    k.style.left = (s / SPAN * 100) + "%";
+    k.innerHTML = `<span>${fmt(s)}</span>`;
+    ticks.appendChild(k);
+  });
+  const levels = [150, 96, 188, 124, 70, 166, 110, 200]; // staggered stem heights
+  TAGS.forEach((tag, i) => {
+    const el = document.createElement("div");
+    el.className = "tag " + tag.cls;
+    el.style.left = (tag.t / SPAN * 100) + "%";
+    el.style.animationDelay = (0.15 + i * 0.12) + "s";
+    const h = levels[i % levels.length];
+    el.innerHTML = `<span class="pill">${tag.label}</span><span class="stem" style="height:${h}px"></span><span class="ts">${fmt(tag.t)}</span>`;
+    tl.appendChild(el);
+  });
+
+  // ---- wire up demo buttons from CONFIG ----
+  document.querySelectorAll(".demo-btn").forEach(btn => {
+    const key = btn.dataset.demo;
+    const gas = (DEMOS[key] && DEMOS[key].gas || "").trim();
+    if (gas) {
+      btn.href = APP_PATH + "?gas=" + encodeURIComponent(gas);
+    } else {
+      btn.setAttribute("aria-disabled", "true");
+      btn.querySelector("span").textContent = "準備中";
+      const arr = btn.querySelector(".arr"); if (arr) arr.remove();
+    }
+  });
+</script>
+</body>
+</html>
