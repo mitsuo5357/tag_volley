@@ -873,7 +873,7 @@ async function pushUnsynced() {
 /* ===== v0.7: 設定オープン時に合言葉ゲート（照合はサーバ側／モード表示） ===== */
 const ADMIN_KEY_LS = "tagging_studio_adminkey";
 let _sessionAdmin = false;
-let _verifiedKey = "";
+let _verifiedKey = "aikotoba";
 try { _verifiedKey = localStorage.getItem(ADMIN_KEY_LS) || ""; } catch (e) {}
 
 const _openRaw = openSettings;   // v0.5でフォーム値を埋めるラップ済みopenSettings
