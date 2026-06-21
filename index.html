@@ -162,6 +162,25 @@ const DEMOS = {
   .how-item h4 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
   .how-item p { font-size: 14px; color: var(--sub); }
 
+  /* feature highlight */
+  .feature {
+    position: relative; background: var(--bg2); border: 1px solid var(--line);
+    border-radius: 14px; padding: 30px 32px; margin-bottom: 40px; overflow: hidden;
+  }
+  .feature::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--sport), var(--edu) 50%, var(--work));
+  }
+  .feature h3 {
+    font-size: clamp(22px, 3.2vw, 32px); font-weight: 900; letter-spacing: -.015em; margin-bottom: 14px;
+  }
+  .feature h3 .accent {
+    background: linear-gradient(110deg, var(--sport), var(--edu) 55%, var(--work));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .feature p { color: var(--sub); font-size: 15px; max-width: 48em; }
+  .feature .mb { color: var(--ink); font-weight: 700; }
+
   /* ---------- footer ---------- */
   footer { border-top: 1px solid var(--line); padding: 44px 0 64px; }
   .note {
@@ -248,6 +267,12 @@ const DEMOS = {
   <div class="wrap">
     <div class="s-head"><span class="s-num">02</span><h2>仕組み</h2></div>
     <p class="s-sub">研修で終わらせず、現場で使う。スキルを見える化し、必要な瞬間に学ぶ——「スキルの可視化」と「現場のパフォーマンス支援」を、いちばん軽い形で。</p>
+
+    <div class="feature">
+      <h3><span class="accent">動画は、配らない。</span></h3>
+      <p>共有するのは、タグの入った<span class="mb">軽いシート1枚</span>だけ。何百MBの動画をやり取りしなくても、「どこを・どう見るか」という学びがチームに渡る。回線が細くても、端末が非力でも。</p>
+    </div>
+
     <div class="how-grid">
       <div class="how-item">
         <div class="n">A</div>
