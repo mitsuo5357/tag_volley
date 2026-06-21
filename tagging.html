@@ -820,12 +820,11 @@ function applyShared(p) {
   const st = parseSettingsRows(p.settings || []);
   if (st.proj) proj = st.proj;
   options = Object.assign(options, st.options);
-  const merged = mergeRecords(records, parseLogRows(p.log || []), DEVICE_ID);
-  records = merged.merged;
-  if (options.videoUrl && video && !video.src) loadVideoUrl(options.videoUrl);
+  records = parseLogRows(p.log || []);   // v0.12: マージせず読み込んだスプシで置換（環境の混在を防止）
+  if (options.videoUrl && video) loadVideoUrl(options.videoUrl);   // v0.12: 環境ごとに動画を毎回切り替え
   renderAxes(); updateCounter(); renderOverlay(); renderLog(); save();
   const status = document.getElementById("ss-status");
-  if (status) status.textContent = "\u2713 反映（他者+" + merged.added + "）";
+  if (status) status.textContent = "\u2713 反映（" + records.length + "件）";
 }
 
 function saveSyncConfig() {
@@ -874,7 +873,7 @@ async function pushUnsynced() {
 /* ===== v0.7: 設定オープン時に合言葉ゲート（照合はサーバ側／モード表示） ===== */
 const ADMIN_KEY_LS = "tagging_studio_adminkey";
 let _sessionAdmin = false;
-let _verifiedKey = "";
+let _verifiedKey = "aikotoba";
 try { _verifiedKey = localStorage.getItem(ADMIN_KEY_LS) || ""; } catch (e) {}
 
 const _openRaw = openSettings;   // v0.5でフォーム値を埋めるラップ済みopenSettings
